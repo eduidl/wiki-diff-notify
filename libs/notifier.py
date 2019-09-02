@@ -1,7 +1,5 @@
-import argparse
 from configparser import ConfigParser
 from pathlib import Path
-from time import sleep
 from typing import Dict, List
 
 import git  # type: ignore
@@ -9,29 +7,10 @@ import slack  # type: ignore
 import slack.errors  # type: ignore
 from slack.web import slack_response  # type: ignore
 
-ROOT: Path = Path(__file__).parent.resolve() / 'wikis'
+from .channel import Channel
+from .repository import Repository
 
-
-class Repository:
-
-    def __init__(self, repo: git.Repo) -> None:
-        self.repo: git.Repo = repo
-        self.name: str = Path(repo.working_dir).name
-
-    def get_forward_commits(self) -> List[git.Commit]:
-        self.repo.git.checkout('master')
-        prev_commit = self.repo.commit('HEAD')
-        self.repo.git.pull()
-        forward_commits = []
-        for commit in self.repo.iter_commits():
-            forward_commits.append(commit)
-            if commit == prev_commit:
-                break
-        forward_commits.reverse()
-        return forward_commits
-
-    def rollback(self, count: int) -> None:
-        self.repo.git.reset(f'HEAD~{count}', '--hard')
+ROOT: Path = Path(__file__).parent.resolve() / '..' / 'wikis'
 
 
 def _get_wiki_repos() -> List[Repository]:
@@ -41,13 +20,12 @@ def _get_wiki_repos() -> List[Repository]:
 class WikiDiffNotifier:
 
     def __init__(self, config_path: Path) -> None:
-        self.config_path: Path = config_path
         self.config: ConfigParser = ConfigParser()
         self.config.read(config_path)
         self.client: slack.WebClient = slack.WebClient(token=self.config['Slack']['APIToken'])
         self.repos: List[Repository] = _get_wiki_repos()
-        self.channel_name2id: Dict[str, str] = self.__get_channel_name2id()
-        self.__validate_config()
+        self.channels: Dict[str, Channel] = self.__get_channels()
+        self.__validate_config(config_path)
 
     def notify(self) -> None:
         for repo in self.repos:
@@ -56,7 +34,8 @@ class WikiDiffNotifier:
             prev_commit = forward_commits[0]
             prev_commit_i = 0
 
-            self.__check_channel_is_not_archived(self.config['NotifyTo'][repo.name])
+            repo_name = self.config['NotifyTo'][repo.name]
+            self.channels[repo_name].assert_not_archived(self.client)
             for i, curr_commit in enumerate(forward_commits):
                 if i == 0:
                     continue
@@ -88,17 +67,8 @@ class WikiDiffNotifier:
                                         content=diff.diff.decode(encoding='utf-8'),
                                         filetype='diff')
 
-    def __check_channel_is_not_archived(self, channel_name: str) -> None:
-        res = self.client.channels_info(channel=self.channel_name2id[channel_name])
-        if not res['ok']:
-            print(res)
-            raise RuntimeError('channels.info failed')
-        if res['channel']['is_archived']:
-            print(res)
-            raise RuntimeError(f'Channel #{channel_name} have been archived')
-
-    def __get_channel_name2id(self) -> Dict[str, str]:
-        channel_name2id = {}
+    def __get_channels(self) -> Dict[str, Channel]:
+        channel_info = {}
 
         # public channel
         res = self.client.channels_list(exclude_archived=1)
@@ -106,40 +76,28 @@ class WikiDiffNotifier:
             print(res)
             raise RuntimeError('channels.list failed')
         for channel in res['channels']:
-            channel_name2id[channel['name']] = channel['id']
+            name = channel['name']
+            channel_info[name] = Channel(name=name, id=channel['id'], private=False)
 
         # private channel
         res = self.client.groups_list(exclude_archived=1)
         if not res['ok']:
             print(res)
             raise RuntimeError('groups.list failed')
-        for gruop in res['groups']:
-            channel_name2id[gruop['name']] = gruop['id']
+        for group in res['groups']:
+            name = group['name']
+            channel_info[name] = Channel(name=name, id=group['id'], private=True)
 
-        return channel_name2id
+        return channel_info
 
-    def __validate_config(self) -> None:
+    def __validate_config(self, config_path: Path) -> None:
         repo_names = [repo.name for repo in self.repos]
         for repo_name, channel_name in self.config['NotifyTo'].items():
             if repo_name not in repo_names:
                 raise RuntimeError(f'{ROOT / repo_name} does not exist')
-            if channel_name not in self.channel_name2id.keys():
+            if channel_name not in self.channels:
                 raise RuntimeError(f'Channel #{channel_name} does not exist or is invisible from bot or is archived')
         for repo in self.repos:
             if repo.name not in self.config['NotifyTo']:
-                raise RuntimeError(f'Configuration of {repo.name} is not described in {self.config_path}')
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--config', default='config.ini')
-    args = parser.parse_args()
-    config_path = Path(args.config).resolve()
-    notifier = WikiDiffNotifier(config_path)
-    while True:
-        notifier.notify()
-        sleep(5 * 60)
-
-
-if __name__ == '__main__':
-    main()
+                raise RuntimeError(f'Configuration of {repo.name} is not described in {config_path}')
+        print('Validation of configuration has been done.')

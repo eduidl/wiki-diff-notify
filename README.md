@@ -49,7 +49,7 @@ test.wili = random
 
 ```terminal
 pipenv sync
-pipenv run python wiki_diff_notify.py --config <config_path>
+pipenv run python main.py --config <config_path>
 ```
 
 ## その他
