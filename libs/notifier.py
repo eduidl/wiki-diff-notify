@@ -24,7 +24,7 @@ class WikiDiffNotifier:
         self.config.read(config_path)
         self.client: slack.WebClient = slack.WebClient(token=self.config['Slack']['APIToken'])
         self.repos: List[Repository] = _get_wiki_repos()
-        self.channels: Dict[str, Channel] = self.__get_channels()
+        self.channels: Dict[str, Channel] = Channel.get_channels(self.client)
         self.__validate_config(config_path)
 
     def notify(self) -> None:
@@ -66,29 +66,6 @@ class WikiDiffNotifier:
                                         title=curr_commit.summary,
                                         content=diff.diff.decode(encoding='utf-8'),
                                         filetype='diff')
-
-    def __get_channels(self) -> Dict[str, Channel]:
-        channel_info = {}
-
-        # public channel
-        res = self.client.channels_list(exclude_archived=1)
-        if not res['ok']:
-            print(res)
-            raise RuntimeError('channels.list failed')
-        for channel in res['channels']:
-            name = channel['name']
-            channel_info[name] = Channel(name=name, id=channel['id'], private=False)
-
-        # private channel
-        res = self.client.groups_list(exclude_archived=1)
-        if not res['ok']:
-            print(res)
-            raise RuntimeError('groups.list failed')
-        for group in res['groups']:
-            name = group['name']
-            channel_info[name] = Channel(name=name, id=group['id'], private=True)
-
-        return channel_info
 
     def __validate_config(self, config_path: Path) -> None:
         repo_names = [repo.name for repo in self.repos]

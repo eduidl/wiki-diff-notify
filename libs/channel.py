@@ -1,4 +1,4 @@
-from typing import NamedTuple
+from typing import Dict, NamedTuple
 
 import slack  # type: ignore
 from slack.web.base_client import SlackResponse  # type: ignore
@@ -33,6 +33,28 @@ class Channel(NamedTuple):
             self.__raise(res, 'groups.info failed')
         if res['group']['is_archived']:
             self.__raise(res, f'Channel #{self.name} have been archived')
+
+    @classmethod
+    def get_channels(cls, client: slack.WebClient) -> Dict[str, 'Channel']:
+        channels: Dict[str, 'Channel'] = {}
+
+        # public channel
+        res = client.channels_list(exclude_archived=1)
+        if not res['ok']:
+            cls.__raise(res, 'channels.list failed')
+        for channel in res['channels']:
+            name = channel['name']
+            channels[name] = Channel(name=name, id=channel['id'], private=False)
+
+        # private channel
+        res = client.groups_list(exclude_archived=1)
+        if not res['ok']:
+            cls.__raise(res, 'groups.list failed')
+        for group in res['groups']:
+            name = group['name']
+            channels[name] = Channel(name=name, id=group['id'], private=True)
+
+        return channels
 
     @staticmethod
     def __raise(res: SlackResponse, message: str) -> None:
