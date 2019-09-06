@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Dict, List
 
 import git  # type: ignore
+
 import slack  # type: ignore
 import slack.errors  # type: ignore
 from slack.web import slack_response  # type: ignore
