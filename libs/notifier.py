@@ -26,6 +26,7 @@ class WikiDiffNotifier:
         self.client: slack.WebClient = slack.WebClient(token=self.config['Slack']['APIToken'])
         self.repos: List[Repository] = _get_wiki_repos()
         self.channels: Dict[str, Channel] = Channel.get_channels(self.client)
+        self.debug: bool = False
         self.__validate_config(config_path)
 
     def notify(self) -> None:
@@ -62,11 +63,18 @@ class WikiDiffNotifier:
                 prev_commit_i = i
 
     def __upload_diff(self, repo: Repository, curr_commit: git.Commit, diff: git.Diff) -> slack_response:
-        return self.client.files_upload(channels=self.config['NotifyTo'][repo.name],
-                                        initial_comment=f'{diff.b_path} is updated by {curr_commit.author.name}',
-                                        title=curr_commit.summary,
-                                        content=diff.diff.decode(encoding='utf-8'),
-                                        filetype='diff')
+        args = dict(channels=self.config['NotifyTo'][repo.name],
+                    initial_comment=f'{diff.b_path} is updated by {curr_commit.author.name}',
+                    title=curr_commit.summary,
+                    content=diff.diff.decode(encoding='utf-8'),
+                    filetype='diff')
+        if self.debug:
+            from pprint import pprint
+            print('call self.client.files_upload with args:')
+            pprint(args)
+            return {'ok': True}
+        else:
+            return self.client.files_upload(**args)
 
     def __validate_config(self, config_path: Path) -> None:
         repo_names = [repo.name for repo in self.repos]
