@@ -1,5 +1,6 @@
 from configparser import ConfigParser
 from pathlib import Path
+from pprint import pprint
 from typing import Dict, List
 
 import git  # type: ignore
@@ -45,11 +46,12 @@ class WikiDiffNotifier:
                         curr_commit.author == forward_commits[i + 1].author:
                     continue
                 for diff_item in prev_commit.diff(curr_commit, create_patch=True):
-                    if Path(diff_item.b_path).suffix != '.md':
+                    if diff_item.a_path and Path(diff_item.a_path).suffix != '.md' or \
+                            diff_item.b_path and Path(diff_item.b_path).suffix != '.md':
                         # image or other files
                         continue
                     try:
-                        res = self.__upload_diff(repo, curr_commit, diff_item)
+                        res = self.__notify_diff(repo, curr_commit, diff_item)
                     except slack.errors.SlackClientError:
                         repo.rollback(len(forward_commits) - prev_commit_i + 1)
                         raise
@@ -57,24 +59,40 @@ class WikiDiffNotifier:
                         if not res['ok']:
                             print(res)
                             repo.rollback(len(forward_commits) - prev_commit_i + 1)
-                            raise RuntimeError('files.upload failed')
+                            raise RuntimeError('failed to notify')
 
                 prev_commit = curr_commit
                 prev_commit_i = i
 
-    def __upload_diff(self, repo: Repository, curr_commit: git.Commit, diff: git.Diff) -> slack_response:
+    def __notify_diff(self, repo: Repository, curr_commit: git.Commit, diff: git.Diff) -> slack_response:
+        if diff.b_path is None:
+            return self.__post_message(repo, f'{diff.a_path} is removed by {curr_commit.author.name}')
+        elif diff.a_path != diff.b_path:
+            return self.__post_message(repo, f'{diff.a_path} is renamed to {diff.b_path} by {curr_commit.author.name}')
+        else:
+            return self.__upload_diff_file(repo, curr_commit, diff)
+
+    def __upload_diff_file(self, repo: Repository, curr_commit: git.Commit, diff: git.Diff) -> slack_response:
         args = dict(channels=self.config['NotifyTo'][repo.name],
                     initial_comment=f'{diff.b_path} is updated by {curr_commit.author.name}',
                     title=curr_commit.summary,
                     content=diff.diff.decode(encoding='utf-8'),
                     filetype='diff')
         if self.debug:
-            from pprint import pprint
             print('call self.client.files_upload with args:')
             pprint(args)
             return {'ok': True}
         else:
             return self.client.files_upload(**args)
+
+    def __post_message(self, repo: Repository, message: str) -> slack_response:
+        args = dict(channel=self.config['NotifyTo'][repo.name], text=message)
+        if self.debug:
+            print('call self.client.chat_postMessage with args:')
+            pprint(args)
+            return {'ok': True}
+        else:
+            return self.client.chat_postMessage(**args)
 
     def __validate_config(self, config_path: Path) -> None:
         repo_names = [repo.name for repo in self.repos]
