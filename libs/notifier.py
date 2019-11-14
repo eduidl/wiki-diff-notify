@@ -65,16 +65,19 @@ class WikiDiffNotifier:
                 prev_commit_i = i
 
     def __notify_diff(self, repo: Repository, curr_commit: git.Commit, diff: git.Diff) -> slack_response:
+        assert diff.a_path or diff.b_path
         if diff.b_path is None:
             return self.__post_message(repo, f'{diff.a_path} is removed by {curr_commit.author.name}')
-        elif diff.a_path != diff.b_path:
+        elif len(diff.diff) == 0:
+            assert diff.a_path != diff.b_path and diff.a_path is not None
             return self.__post_message(repo, f'{diff.a_path} is renamed to {diff.b_path} by {curr_commit.author.name}')
         else:
             return self.__upload_diff_file(repo, curr_commit, diff)
 
     def __upload_diff_file(self, repo: Repository, curr_commit: git.Commit, diff: git.Diff) -> slack_response:
+        what_do = 'created' if diff.a_path is None else 'updated'
         args = dict(channels=self.config['NotifyTo'][repo.name],
-                    initial_comment=f'{diff.b_path} is updated by {curr_commit.author.name}',
+                    initial_comment=f'{diff.b_path} is {what_do} by {curr_commit.author.name}',
                     title=curr_commit.summary,
                     content=diff.diff.decode(encoding='utf-8'),
                     filetype='diff')
