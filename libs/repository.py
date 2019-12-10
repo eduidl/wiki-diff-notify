@@ -1,4 +1,6 @@
+import os
 from pathlib import Path
+import subprocess
 from typing import List
 
 import git  # type: ignore
@@ -13,7 +15,21 @@ class Repository:
     def get_forward_commits(self) -> List[git.Commit]:
         self.repo.git.checkout('master')
         prev_commit = self.repo.commit('HEAD')
-        self.repo.git.pull()
+        """
+        HACK: self.repo.pull() does not work well. (sometimes fails)"
+        Error message is as follows.
+
+        git.exc.GitCommandError: Cmd('git') failed due to: exit code(1)
+          cmdline: git pull
+          stderr: 'Internal API unreachable
+        fatal: Could not read from remote repository.
+
+        Please make sure you have the correct access rights
+        and the repository exists.'
+        """
+        # self.repo.pull()
+        os.chdir(self.repo.working_dir)
+        subprocess.run('git pull origin master'.split(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         forward_commits = []
         for commit in self.repo.iter_commits():
             forward_commits.append(commit)
