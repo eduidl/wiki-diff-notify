@@ -63,6 +63,12 @@ class WikiDiffNotifier:
                 prev_commit = curr_commit
                 prev_commit_i = i
 
+    def send_message(self, message: str) -> None:
+        for repo in self.repos:
+            repo_name = self.config['NotifyTo'][repo.name]
+            self.channels[repo_name].assert_not_archived(self.client)
+            self.__post_message(repo, message)
+
     def __notify_diff(self, repo: Repository, curr_commit: git.Commit, diff: git.Diff) -> slack_response:
         assert diff.a_path or diff.b_path
         if diff.b_path is None:
