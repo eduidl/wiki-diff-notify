@@ -2,7 +2,7 @@ from argparse import ArgumentParser
 from pathlib import Path
 from time import sleep
 
-from libs import WikiDiffNotifier
+from . import WikiDiffNotifier
 
 
 def main() -> None:

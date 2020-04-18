@@ -55,7 +55,7 @@ $ poetry install
 ## Execute
 
 ```terminal
-$ poetry run python main.py --config <config_path>
+$ poetry run python -m wiki_diff_notify --config <config_path>
 ```
 
 ## その他
