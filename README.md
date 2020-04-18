@@ -4,8 +4,8 @@ GitLab wikiの差分のSlack通知
 ## Requirements
 
 - Git
-- Python 3.6
-- Pipenv
+- Python 3.6+
+- Poetry
 
 ## 準備
 
@@ -45,11 +45,17 @@ test.wili = random
 
 4. 通知させたいchannelがprivateの場合は，2.でインストールしたアプリを `/invite` 等してそのchannelに追加する
 
-## 動作
+## Setup of Poetry
 
 ```terminal
-pipenv sync
-pipenv run python main.py --config <config_path>
+$ poetry env use python3.6
+$ poetry install
+```
+
+## Execute
+
+```terminal
+$ poetry run python main.py --config <config_path>
 ```
 
 ## その他
