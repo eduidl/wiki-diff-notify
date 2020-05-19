@@ -36,7 +36,7 @@ GitLab wikiの差分のSlack通知
 APIToken = <2.で得たBot User OAuth Access Token>
 
 [NotifyTo]
-test.wili = random
+test.wiki = random
 <1.でcloneしたリポジトリのディレクトリ> = <投稿したいchannel>
 # 以降必要な分だけ
 ```
